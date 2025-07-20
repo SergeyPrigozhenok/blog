@@ -1,60 +1,18 @@
 <?php
+require_once "blog_functions.php";
 require_once 'blog_data.php';
 
 // Получаем параметры поиска
-$searchQuery = isset($_GET['q']) ? trim($_GET['q']) : '';
-$categoryFilter = isset($_GET['category']) ? (int)$_GET['category'] : 0;
-$tagFilter = isset($_GET['tag']) ? trim($_GET['tag']) : '';
-$authorFilter = isset($_GET['author']) ? (int)$_GET['author'] : 0;
-
-// Функция поиска статей
-function searchArticles($query, $categoryId = 0, $tagSlug = '', $authorId = 0)
-{
-    global $articles;
-
-    $results = [];
-
-    foreach ($articles as $article) {
-        $fullArticle = getArticleWithRelations($article['id']);
-        $matches = true;
-
-        // Поиск по тексту
-        if ($query && $matches) {
-            $searchText = $fullArticle['title'] . ' ' . $fullArticle['content'] . ' ' . $fullArticle['excerpt'];
-            $matches = stripos($searchText, $query) !== false;
-        }
-
-        // Фильтр по категории
-        if ($categoryId && $matches) {
-            $matches = $fullArticle['category_id'] === $categoryId;
-        }
-
-        // Фильтр по тегу
-        if ($tagSlug && $matches) {
-            $tagSlugs = array_column($fullArticle['tags'], 'slug');
-            $matches = in_array($tagSlug, $tagSlugs);
-        }
-
-        // Фильтр по автору
-        if ($authorId && $matches) {
-            $matches = $fullArticle['author_id'] === $authorId;
-        }
-
-        if ($matches) {
-            $results[] = $fullArticle;
-        }
-    }
-
-    return $results;
-}
+$searchQuery = getParam('q');
+$categoryFilter = getParam('category', 0, 'int');
+$tagFilter = getParam('tag');
+$authorFilter = getParam('author', 0, 'int');
 
 // Выполняем поиск
 $searchResults = searchArticles($searchQuery, $categoryFilter, $tagFilter, $authorFilter);
 
-// Сортируем результаты по релевантности (по количеству просмотров)
-usort($searchResults, function ($a, $b) {
-    return $b['meta']['views'] - $a['meta']['views'];
-});
+// Сортировка статей по релевантности (просмотрам)
+$searchResults = sortArticlesByRelevance($searchResults);
 
 // Статистика поиска
 $totalResults = count($searchResults);
@@ -153,18 +111,12 @@ $totalViews = array_sum(array_column($searchResults, 'meta.views'));
                         <div class="result-meta">
                             <span>👤 <?php echo htmlspecialchars($article['author']['name']) ?></span>
                             <span>📁 <?php echo htmlspecialchars($article['category']['name']) ?></span>
-                            <span>📅 <?php echo date('d.m.Y', strtotime($article['dates']['published'])) ?></span>
-                            <span>👁️ <?php echo number_format($article['meta']['views']) ?> просмотров</span>
+                            <span>📅 <?php echo formatDate($article['dates']['published'], 'd.m.Y') ?></span>
+                            <span>👁️ <?php echo formatViews($article['meta']['views']) ?> просмотров</span>
                             <span>⏱️ <?php echo $article['meta']['reading_time'] ?> мин</span>
                         </div>
 
-                        <div class="result-tags">
-                            <?php foreach ($article['tags'] as $tag): ?>
-                                <a href="search.php?tag=<?php echo urlencode($tag['slug']) ?>" class="tag">
-                                    #<?php echo htmlspecialchars($tag['name']) ?>
-                                </a>
-                            <?php endforeach; ?>
-                        </div>
+                        <?php echo generateTagsHtml($article['tags'], true) ?>
                     </div>
                 <?php endforeach; ?>
 

@@ -1,11 +1,12 @@
 <?php
+require_once "blog_functions.php";
 require_once 'blog_data.php';
 
 // Получаем ID статьи из URL
-$articleId = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+$articleId = getParam('id', 0, 'int');
 
 // Получаем статью с полной информацией
-$article = getArticleWithRelations($articleId);
+$article = getArticleSafely($articleId);
 
 // Если статья не найдена
 if (!$article) {
@@ -22,12 +23,6 @@ $relatedArticles = array_filter($articles, function ($art) use ($article) {
     return $art['category_id'] === $article['category_id'] && $art['id'] !== $article['id'];
 });
 $relatedArticles = array_slice($relatedArticles, 0, 3);
-
-// Функция для форматирования даты
-function formatDate($dateString)
-{
-    return date('d F Y в H:i', strtotime($dateString));
-}
 
 // Функция для подсчета слов в тексте
 function countWords($text)
@@ -66,7 +61,7 @@ function countWords($text)
                     </div>
                     <div class="meta-card">
                         <div class="meta-label">Дата публикации</div>
-                        <div class="meta-value"><?php echo formatDate($article['dates']['published']) ?></div>
+                        <div class="meta-value"><?php echo formatDate($article['dates']['published'], 'd.m.Y') ?></div>
                     </div>
                     <div class="meta-card">
                         <div class="meta-label">Время чтения</div>
@@ -74,13 +69,8 @@ function countWords($text)
                     </div>
                 </div>
 
-                <div class="article-tags">
-                    <?php foreach ($article['tags'] as $tag): ?>
-                        <a href="search.php?tag=<?php echo urlencode($tag['slug']) ?>" class="tag">
-                            #<?php echo htmlspecialchars($tag['name']) ?>
-                        </a>
-                    <?php endforeach; ?>
-                </div>
+                <?php echo generateTagsHtml($article['tags'], true) ?>
+
             </header>
 
             <div class="article-content">
@@ -115,7 +105,7 @@ function countWords($text)
                         <a href="article.php?id=<?php echo $related['id'] ?>" class="related-item">
                             <h4><?php echo htmlspecialchars($related['title']) ?></h4>
                             <div class="related-meta">
-                                👁️ <?php echo number_format($related['meta']['views']) ?> просмотров •
+                                👁️ <?php echo formatViews($related['meta']['views']) ?> просмотров •
                                 ⏱️ <?php echo $related['meta']['reading_time'] ?> мин чтения
                             </div>
                         </a>
