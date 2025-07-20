@@ -85,7 +85,7 @@ $articles = [
         'featured' => true,
         'featured_image' => 'articles/php8-features.jpg'
     ],
-    
+
     2 => [
         'id' => 2,
         'title' => 'Создание REST API на PHP: Полное руководство',
@@ -110,7 +110,7 @@ $articles = [
         'featured' => false,
         'featured_image' => 'articles/rest-api-php.jpg'
     ],
-    
+
     3 => [
         'id' => 3,
         'title' => 'MySQL оптимизация: Как ускорить запросы в 10 раз',
@@ -139,41 +139,43 @@ $articles = [
 
 // Функции для работы с данными
 
-function getAuthorById($id) {
+function getAuthorById($id)
+{
     global $authors;
     return $authors[$id] ?? null;
 }
 
 // Получение категории по ID
-function getCategoryById($id) {
+function getCategoryById($id)
+{
     global $categories;
     return $categories[$id] ?? null;
 }
 
 // Получение тегов по массиву ID
-function getTagsById($ids) {
+function getTagsById($ids)
+{
     global $tags;
-    return array_filter($tags, function($tag) use ($ids) {
+    return array_filter($tags, function ($tag) use ($ids) {
         return in_array($tag['id'], $ids);
     });
 }
 
 // Получение статьи со всеми связанными данными
-function getArticleWithRelations($articleID) {
+function getArticleWithRelations($articleID)
+{
     global $articles;
 
-    if(!isset($articles[$articleID])) {
+    if (!isset($articles[$articleID])) {
         return null;
     }
 
     $article = $articles[$articleID];
 
-// Добавляем связанные данные
-$article['author'] = getAuthorById($article['author_id']);
-$article['category'] = getCategoryById($article['category_id']);
-$article['tags'] = getTagsById($article['tag_ids']);
+    // Добавляем связанные данные
+    $article['author'] = getAuthorById($article['author_id']);
+    $article['category'] = getCategoryById($article['category_id']);
+    $article['tags'] = getTagsById($article['tag_ids']);
 
-return $article;
+    return $article;
 }
-
-?>

@@ -9,7 +9,7 @@ foreach ($articles as $articleID => $article) {
 };
 
 // Сортируем по дате публикации (новые сначала)
-$allArticles = sortArticlesByDate($allArticles);  
+$allArticles = sortArticlesByDate($allArticles);
 
 // Получаем рекомендуемые статьи
 $featuredArticles = array_filter($allArticles, function ($article) {
