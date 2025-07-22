@@ -1,133 +1,120 @@
 <?php
-require_once "blog_functions.php";
-require_once 'blog_data.php';
+require_once 'data.php';
+require_once 'functions.php';
 
-// Получаем параметры поиска
-$searchQuery = getParam('q');
-$categoryFilter = getParam('category', 0, 'int');
-$tagFilter = getParam('tag');
-$authorFilter = getParam('author', 0, 'int');
+// Получаем поисковый запрос
+$query = isset($_GET['q']) ? trim($_GET['q']) : '';
 
 // Выполняем поиск
-$searchResults = searchArticles($searchQuery, $categoryFilter, $tagFilter, $authorFilter);
-
-// Сортировка статей по релевантности (просмотрам)
-$searchResults = sortArticlesByRelevance($searchResults);
-
-// Статистика поиска
+$searchResults = searchArticles($query);
 $totalResults = count($searchResults);
-$totalViews = array_sum(array_column($searchResults, 'meta.views'));
 ?>
 
 <!DOCTYPE html>
 <html lang="ru">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Поиск по блогу | IT Blog</title>
-    <link rel="stylesheet" href="./css/search.css">
+    <title>Поиск<?= $query ? ': ' . htmlspecialchars($query) : '' ?> | IT Blog</title>
+    <link rel="stylesheet" href="./css/style.css">
 </head>
-
 <body>
     <div class="container">
-        <a href="index.php" class="back-link">← Вернуться на главную</a>
-
-        <div class="search-header">
+        <nav class="breadcrumb">
+            <a href="index.php">← Назад на главную</a>
+        </nav>
+        
+        <header class="search-header">
             <h1>🔍 Поиск по блогу</h1>
-
+            
+            <!-- Форма поиска -->
             <form method="GET" class="search-form">
-                <input
-                    type="text"
-                    name="q"
-                    class="search-input"
-                    placeholder="Введите поисковый запрос..."
-                    value="<?php echo htmlspecialchars($searchQuery) ?>">
+                <input 
+                    type="text" 
+                    name="q" 
+                    class="search-input" 
+                    placeholder="Введите поисковый запрос..." 
+                    value="<?= htmlspecialchars($query) ?>"
+                    autofocus
+                >
                 <button type="submit" class="search-btn">Найти</button>
             </form>
-
-            <div class="filters">
-                <div class="filter-group">
-                    <label>Категория:</label>
-                    <select name="category" class="filter-select" onchange="this.form.submit()">
-                        <option value="0">Все категории</option>
-                        <?php foreach ($categories as $category): ?>
-                            <option value="<?php echo $category['id'] ?>" <?php echo $categoryFilter === $category['id'] ? 'selected' : '' ?>>
-                                <?php echo htmlspecialchars($category['name']) ?>
-                            </option>
+        </header>
+        
+        <!-- Результаты поиска -->
+        <main class="search-results">
+            <?php if ($query): ?>
+                <div class="results-info">
+                    <h2>Результаты поиска</h2>
+                    <p>
+                        <?php if ($totalResults > 0): ?>
+                            Найдено <strong><?= $totalResults ?></strong> 
+                            <?= $totalResults == 1 ? 'статья' : 'статей' ?> 
+                            по запросу "<strong><?= htmlspecialchars($query) ?></strong>"
+                        <?php else: ?>
+                            По запросу "<strong><?= htmlspecialchars($query) ?></strong>" ничего не найдено
+                        <?php endif; ?>
+                    </p>
+                </div>
+                
+                <?php if ($totalResults > 0): ?>
+                    <div class="results-grid">
+                        <?php foreach ($searchResults as $article): ?>
+                        <article class="result-card">
+                            <h3 class="result-title">
+                                <a href="article.php?id=<?= $article['id'] ?>">
+                                    <?= htmlspecialchars($article['title']) ?>
+                                </a>
+                            </h3>
+                            
+                            <p class="result-excerpt">
+                                <?= htmlspecialchars($article['excerpt']) ?>
+                            </p>
+                            
+                            <div class="result-meta">
+                                <span>👤 <?= htmlspecialchars($article['author']['name']) ?></span>
+                                <span>📁 <?= htmlspecialchars($article['category']) ?></span>
+                                <span>📅 <?= formatDate($article['date']) ?></span>
+                                <span>👁️ <?= formatViews($article['views']) ?></span>
+                                <span>⏱️ <?= $article['reading_time'] ?> мин</span>
+                            </div>
+                            
+                            <div class="result-tags">
+                                <?= renderTags($article['tags']) ?>
+                            </div>
+                        </article>
                         <?php endforeach; ?>
-                    </select>
-                </div>
-
-                <div class="filter-group">
-                    <label>Автор:</label>
-                    <select name="author" class="filter-select" onchange="this.form.submit()">
-                        <option value="0">Все авторы</option>
-                        <?php foreach ($authors as $author): ?>
-                            <option value="<?php echo $author['id'] ?>" <?php echo $authorFilter === $author['id'] ? 'selected' : '' ?>>
-                                <?php echo htmlspecialchars($author['name']) ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-
-                <!-- Скрытые поля для сохранения других параметров -->
-                <input type="hidden" name="q" value="<?php echo htmlspecialchars($searchQuery) ?>">
-                <input type="hidden" name="tag" value="<?php echo htmlspecialchars($tagFilter) ?>">
-            </div>
-        </div>
-
-        <div class="search-results">
-            <?php if ($totalResults > 0): ?>
-                <div class="results-header">
-                    <div class="results-stats">
-                        <div class="stat-item">
-                            <div class="stat-number"><?php echo $totalResults ?></div>
-                            <div>Найдено статей</div>
-                        </div>
-                        <div class="stat-item">
-                            <div class="stat-number"><?php echo number_format($totalViews) ?></div>
-                            <div>Общие просмотры</div>
-                        </div>
-                        <div class="stat-item">
-                            <div class="stat-number"><?php echo round($totalViews / $totalResults) ?></div>
-                            <div>Среднее просмотров</div>
-                        </div>
                     </div>
-                </div>
-
-                <?php foreach ($searchResults as $article): ?>
-                    <div class="result-item">
-                        <h2 class="result-title">
-                            <a href="article.php?id=<?php echo $article['id'] ?>">
-                                <?php echo htmlspecialchars($article['title']) ?>
-                            </a>
-                        </h2>
-
-                        <p class="result-excerpt">
-                            <?php echo htmlspecialchars($article['excerpt']) ?>
-                        </p>
-
-                        <div class="result-meta">
-                            <span>👤 <?php echo htmlspecialchars($article['author']['name']) ?></span>
-                            <span>📁 <?php echo htmlspecialchars($article['category']['name']) ?></span>
-                            <span>📅 <?php echo formatDate($article['dates']['published'], 'd.m.Y') ?></span>
-                            <span>👁️ <?php echo formatViews($article['meta']['views']) ?> просмотров</span>
-                            <span>⏱️ <?php echo $article['meta']['reading_time'] ?> мин</span>
-                        </div>
-
-                        <?php echo generateTagsHtml($article['tags'], true) ?>
+                <?php else: ?>
+                    <div class="no-results">
+                        <h3>😔 К сожалению, ничего не найдено</h3>
+                        <p>Попробуйте:</p>
+                        <ul>
+                            <li>Проверить правильность написания</li>
+                            <li>Использовать более общие термины</li>
+                            <li>Попробовать другие ключевые слова</li>
+                        </ul>
+                        <a href="index.php" class="btn">Посмотреть все статьи</a>
                     </div>
-                <?php endforeach; ?>
-
+                <?php endif; ?>
+                
             <?php else: ?>
-                <div class="no-results">
-                    <h2>😔 Статьи не найдены</h2>
-                    <p>Попробуйте изменить параметры поиска или вернитесь к <a href="index.php">списку всех статей</a>.</p>
+                <div class="search-help">
+                    <h2>Как искать статьи?</h2>
+                    <p>Введите ключевые слова в поле выше. Поиск выполняется по заголовкам, содержимому и описаниям статей.</p>
+                    
+                    <h3>Популярные темы:</h3>
+                    <div class="popular-tags">
+                        <a href="?q=PHP" class="tag">PHP</a>
+                        <a href="?q=JavaScript" class="tag">JavaScript</a>
+                        <a href="?q=MySQL" class="tag">MySQL</a>
+                        <a href="?q=API" class="tag">API</a>
+                        <a href="?q=Backend" class="tag">Backend</a>
+                        <a href="?q=Frontend" class="tag">Frontend</a>
+                    </div>
                 </div>
             <?php endif; ?>
-        </div>
+        </main>
     </div>
 </body>
-
 </html>

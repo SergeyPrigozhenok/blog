@@ -1,12 +1,13 @@
+
 <?php
-require_once "blog_functions.php";
-require_once 'blog_data.php';
+require_once 'data.php';
+require_once 'functions.php';
 
-// Получаем ID статьи из URL
-$articleId = getParam('id', 0, 'int');
+// Получаем ID статьи
+$articleId = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 
-// Получаем статью с полной информацией
-$article = getArticleSafely($articleId);
+// Получаем статью
+$article = getArticle($articleId);
 
 // Если статья не найдена
 if (!$article) {
@@ -15,105 +16,100 @@ if (!$article) {
     exit;
 }
 
-// Увеличиваем счетчик просмотров (в реальном приложении это делалось бы в БД)
-$articles[$articleId]['meta']['views']++;
+// Увеличиваем просмотры
+$currentViews = incrementViews($articleId);
+$article['views'] = $currentViews;
 
-// Получаем похожие статьи (из той же категории)
-$relatedArticles = array_filter($articles, function ($art) use ($article) {
-    return $art['category_id'] === $article['category_id'] && $art['id'] !== $article['id'];
-});
-$relatedArticles = array_slice($relatedArticles, 0, 3);
-
-// Функция для подсчета слов в тексте
-function countWords($text)
-{
-    return str_word_count(strip_tags($text));
-}
+// Получаем похожие статьи
+$similarArticles = getSimilarArticles($articleId);
 ?>
 
 <!DOCTYPE html>
 <html lang="ru">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?php echo htmlspecialchars($article['title']) ?> | IT Blog</title>
-    <link rel="stylesheet" href="./css/article.css">
+    <title><?= htmlspecialchars($article['title']) ?> | IT Blog</title>
+    <link rel="stylesheet" href="./css/style.css">
 </head>
-
 <body>
     <div class="container">
-        <a href="index.php" class="back-link">← Вернуться к списку статей</a>
-
-        <article>
-            <header class="article-header">
-                <h1 class="article-title"><?php echo htmlspecialchars($article['title']) ?></h1>
-                <p class="article-excerpt"><?php echo htmlspecialchars($article['excerpt']) ?></p>
-
-                <div class="article-meta-header">
-                    <div class="meta-card">
-                        <div class="meta-label">Автор</div>
-                        <div class="meta-value"><?php echo htmlspecialchars($article['author']['name']) ?></div>
-                    </div>
-                    <div class="meta-card">
-                        <div class="meta-label">Категория</div>
-                        <div class="meta-value"><?php echo htmlspecialchars($article['category']['name']) ?></div>
-                    </div>
-                    <div class="meta-card">
-                        <div class="meta-label">Дата публикации</div>
-                        <div class="meta-value"><?php echo formatDate($article['dates']['published'], 'd.m.Y') ?></div>
-                    </div>
-                    <div class="meta-card">
-                        <div class="meta-label">Время чтения</div>
-                        <div class="meta-value"><?php echo $article['meta']['reading_time'] ?> минут</div>
-                    </div>
+        <nav class="breadcrumb">
+            <a href="index.php">← Назад к статьям</a>
+        </nav>
+        
+        <!-- Заголовок статьи -->
+        <header class="article-header">
+            <h1 class="article-title"><?= htmlspecialchars($article['title']) ?></h1>
+            <p class="article-excerpt"><?= htmlspecialchars($article['excerpt']) ?></p>
+            
+            <div class="article-info">
+                <div class="info-item">
+                    <strong>Автор:</strong> <?= htmlspecialchars($article['author']['name']) ?>
                 </div>
-
-                <?php echo generateTagsHtml($article['tags'], true) ?>
-
-            </header>
-
-            <div class="article-content">
-                <div class="article-text">
-                    <?php echo nl2br(htmlspecialchars($article['content'])) ?>
+                <div class="info-item">
+                    <strong>Категория:</strong> <?= htmlspecialchars($article['category']) ?>
+                </div>
+                <div class="info-item">
+                    <strong>Дата:</strong> <?= formatDate($article['date']) ?>
+                </div>
+                <div class="info-item">
+                    <strong>Время чтения:</strong> <?= $article['reading_time'] ?> мин
                 </div>
             </div>
-        </article>
-
-        <!-- Информация об авторе -->
-        <div class="author-card">
-            <div class="author-info">
+            
+            <div class="article-tags">
+                <?= renderTags($article['tags']) ?>
+            </div>
+        </header>
+        
+        <!-- Содержимое статьи -->
+        <main class="article-content">
+            <div class="article-text">
+                <?= nl2br(htmlspecialchars($article['content'])) ?>
+            </div>
+        </main>
+        
+        <!-- Автор -->
+        <section class="author-info">
+            <h3>Об авторе</h3>
+            <div class="author-card">
                 <div class="author-avatar">
-                    <?php echo strtoupper(substr($article['author']['name'], 0, 1)) ?>
+                    <?= strtoupper(substr($article['author']['name'], 0, 1)) ?>
                 </div>
                 <div class="author-details">
-                    <h3><?php echo htmlspecialchars($article['author']['name']) ?></h3>
-                    <div><?php echo htmlspecialchars($article['author']['email']) ?></div>
+                    <h4><?= htmlspecialchars($article['author']['name']) ?></h4>
+                    <p><?= htmlspecialchars($article['author']['email']) ?></p>
                 </div>
             </div>
-            <div class="author-bio">
-                <?php echo htmlspecialchars($article['author']['bio']) ?>
-            </div>
-        </div>
-
+        </section>
+        
+        <!-- Статистика просмотров -->
+        <section class="article-stats-section">
+            <p>👁️ Эту статью просмотрели <strong><?= formatViews($article['views']) ?></strong> раз</p>
+        </section>
+        
         <!-- Похожие статьи -->
-        <?php if (!empty($relatedArticles)): ?>
-            <div class="related-articles">
-                <h3 class="related-title">📖 Похожие статьи</h3>
-                <div class="related-list">
-                    <?php foreach ($relatedArticles as $related): ?>
-                        <a href="article.php?id=<?php echo $related['id'] ?>" class="related-item">
-                            <h4><?php echo htmlspecialchars($related['title']) ?></h4>
-                            <div class="related-meta">
-                                👁️ <?php echo formatViews($related['meta']['views']) ?> просмотров •
-                                ⏱️ <?php echo $related['meta']['reading_time'] ?> мин чтения
-                            </div>
+        <?php if (!empty($similarArticles)): ?>
+        <section class="similar-articles">
+            <h3>📖 Похожие статьи</h3>
+            <div class="similar-grid">
+                <?php foreach ($similarArticles as $similar): ?>
+                <article class="similar-card">
+                    <h4>
+                        <a href="article.php?id=<?= $similar['id'] ?>">
+                            <?= htmlspecialchars($similar['title']) ?>
                         </a>
-                    <?php endforeach; ?>
-                </div>
+                    </h4>
+                    <p class="similar-meta">
+                        👁️ <?= formatViews($similar['views']) ?> • 
+                        ⏱️ <?= $similar['reading_time'] ?> мин
+                    </p>
+                </article>
+                <?php endforeach; ?>
             </div>
+        </section>
         <?php endif; ?>
     </div>
 </body>
-
 </html>
