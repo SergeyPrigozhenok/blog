@@ -1,6 +1,15 @@
 <?php
-require_once 'data.php';
 require_once 'functions.php';
+
+// Проверка подключения к БД
+$pdo = getDatabaseConnection();
+if (!$pdo) {
+    echo "<!DOCTYPE html><html><head><title>Ошибка подключения к БД</title></head><body>";
+    echo "<h1>❌ Ошибка подключения к базе данных</h1>";
+    echo "<p>Проверьте настройки в config/database.php или запустите <a href='database/migration.php'>миграцию данных</a></p>";
+    echo "</body></html>";
+    exit;
+}
 
 $allArticles = getAllArticles();
 $stats = getBlogStats();
@@ -28,19 +37,19 @@ $recentArticles = getRecentArticles(5);
         <!-- Статистика -->
         <section class="stats">
             <div class="stat-item">
-                <h3><?= $stats['articles'] ?></h3>
+                <h3><?php echo $stats['articles'] ?></h3>
                 <p>Статей</p>
             </div>
             <div class="stat-item">
-                <h3><?= formatViews($stats['views']) ?></h3>
+                <h3><?php echo formatViews($stats['views']) ?></h3>
                 <p>Просмотров</p>
             </div>
             <div class="stat-item">
-                <h3><?= $stats['authors'] ?></h3>
+                <h3><?php echo $stats['authors'] ?></h3>
                 <p>Авторов</p>
             </div>
             <div class="stat-item">
-                <h3><?= $stats['categories'] ?></h3>
+                <h3><?php echo $stats['categories'] ?></h3>
                 <p>Категорий</p>
             </div>
         </section>
@@ -63,26 +72,26 @@ $recentArticles = getRecentArticles(5);
                 <article class="article-card popular">
                     <div class="article-header">
                         <h3 class="article-title">
-                            <a href="article.php?id=<?= $article['id'] ?>">
-                                <?= htmlspecialchars($article['title']) ?>
+                            <a href="article.php?id=<?php echo $article['id'] ?>">
+                                <?php echo htmlspecialchars($article['title']) ?>
                             </a>
                         </h3>
                         <p class="article-excerpt">
-                            <?= htmlspecialchars($article['excerpt']) ?>
+                            <?php echo htmlspecialchars($article['excerpt']) ?>
                         </p>
                     </div>
                     
                     <div class="article-meta">
-                        <span>👤 <?= htmlspecialchars($article['author']['name']) ?></span>
-                        <span>📁 <?= htmlspecialchars($article['category']) ?></span>
-                        <span>📅 <?= formatDate($article['date']) ?></span>
+                        <span>👤 <?php echo htmlspecialchars($article['author']['name']) ?></span>
+                        <span>📁 <?php echo htmlspecialchars($article['category']) ?></span>
+                        <span>📅 <?php echo formatDate($article['date']) ?></span>
                     </div>
                     
-                    <?= renderTags($article['tags']) ?>
+                    <?php echo renderTags($article['tags']) ?>
                     
                     <div class="article-stats">
-                        <span>👁️ <?= formatViews($article['views']) ?></span>
-                        <span>⏱️ <?= $article['reading_time'] ?> мин</span>
+                        <span>👁️ <?php echo formatViews($article['views']) ?></span>
+                        <span>⏱️ <?php echo $article['reading_time'] ?> мин</span>
                     </div>
                 </article>
                 <?php endforeach; ?>
@@ -92,39 +101,46 @@ $recentArticles = getRecentArticles(5);
 
         <!-- Все статьи -->
         <section class="articles">
-            <h2>📚 Все статьи</h2>
-            <div class="articles-grid">
-                <?php foreach ($allArticles as $article): ?>
-                <article class="article-card">
-                    <div class="article-header">
-                        <h3 class="article-title">
-                            <a href="article.php?id=<?= $article['id'] ?>">
-                                <?= htmlspecialchars($article['title']) ?>
-                            </a>
-                        </h3>
-                        <p class="article-excerpt">
-                            <?= htmlspecialchars($article['excerpt']) ?>
-                        </p>
-                    </div>
-                    
-                    <div class="article-meta">
-                        <span>👤 <?= htmlspecialchars($article['author']['name']) ?></span>
-                        <span>📁 <?= htmlspecialchars($article['category']) ?></span>
-                        <span>📅 <?= formatDate($article['date']) ?></span>
-                    </div>
-                    
-                    <div class="article-tags">
-                        <?= renderTags($article['tags']) ?>
-                    </div>
-                    
-                    <div class="article-stats">
-                        <span>👁️ <?= formatViews($article['views']) ?></span>
-                        <span>⏱️ <?= $article['reading_time'] ?> мин</span>
-                    </div>
-                </article>
-                <?php endforeach; ?>
-            </div>
+            <h2>📚 Все статьи (<?php echo count($allArticles) ?>)</h2>
+            
+            <?php if (empty($allArticles)): ?>
+                <div class="no-articles">
+                    <h3>📝 Статей пока нет</h3>
+                    <p>Создайте первую статью в <a href="admin.php">админ-панели</a></p>
+                </div>
+            <?php else: ?>
+                <div class="articles-grid">
+                    <?php foreach ($allArticles as $article): ?>
+                    <article class="article-card">
+                        <div class="article-header">
+                            <h3 class="article-title">
+                                <a href="article.php?id=<?php echo $article['id'] ?>">
+                                    <?php echo htmlspecialchars($article['title']) ?>
+                                </a>
+                            </h3>
+                            <p class="article-excerpt">
+                                <?php echo htmlspecialchars($article['excerpt']) ?>
+                            </p>
+                        </div>
+                        
+                        <div class="article-meta">
+                            <span>👤 <?php echo htmlspecialchars($article['author']['name']) ?></span>
+                            <span>📁 <?php echo htmlspecialchars($article['category']) ?></span>
+                            <span>📅 <?php echo formatDate($article['date']) ?></span>
+                        </div>
+                        
+                        <div class="article-tags">
+                            <?php echo renderTags($article['tags']) ?>
+                        </div>
+                        
+                        <div class="article-stats">
+                            <span>👁️ <?php echo formatViews($article['views']) ?></span>
+                            <span>⏱️ <?php echo $article['reading_time'] ?> мин</span>
+                        </div>
+                    </article>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
         </section>
-    </main>
 </body>
 </html>
