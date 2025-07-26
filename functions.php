@@ -1,6 +1,5 @@
-
 <?php
-// functions.php - Функции для работы с MySQL базой данных
+// functions.php - Расширенные функции для работы с MySQL базой данных (Занятие 7)
 
 require_once 'config/database.php';
 
@@ -11,6 +10,13 @@ require_once 'config/database.php';
  */
 function formatDate($date) {
     return date('d.m.Y', strtotime($date));
+}
+
+/**
+ * Форматирование даты и времени
+ */
+function formatDateTime($datetime) {
+    return date('d.m.Y H:i', strtotime($datetime));
 }
 
 /**
@@ -45,6 +51,39 @@ function countWords($text) {
 function calculateReadingTime($content) {
     $words = countWords($content);
     return max(1, round($words / 200)); // 200 слов в минуту
+}
+
+/**
+ * Безопасное экранирование HTML
+ */
+function sanitizeString($value) {
+    return htmlspecialchars(trim($value), ENT_QUOTES, 'UTF-8');
+}
+
+/**
+ * Безопасная очистка HTML с разрешенными тегами
+ */
+function sanitizeHTML($value) {
+    $allowedTags = '<p><br><strong><em><u><ol><ul><li><h3><h4><blockquote>';
+    return strip_tags($value, $allowedTags);
+}
+
+/**
+ * Валидация email
+ */
+function validateEmail($email) {
+    return filter_var($email, FILTER_VALIDATE_EMAIL) !== false;
+}
+
+/**
+ * Генерация превью текста
+ */
+function generateExcerpt($content, $length = 200) {
+    $content = strip_tags($content);
+    if (strlen($content) <= $length) {
+        return $content;
+    }
+    return substr($content, 0, $length) . '...';
 }
 
 // ========== ФУНКЦИИ ДЛЯ РАБОТЫ С АВТОРАМИ ==========
@@ -282,6 +321,143 @@ function getAllArticles($limit = null, $offset = 0) {
 }
 
 /**
+ * Получение статей с пагинацией (НОВАЯ ФУНКЦИЯ)
+ */
+function getArticlesWithPagination($page = 1, $perPage = 5) {
+    try {
+        $pdo = getDatabaseConnection();
+        
+        // Подсчитываем общее количество статей
+        $countStmt = $pdo->query("
+            SELECT COUNT(*) FROM articles 
+            WHERE status = 'published'
+        ");
+        $totalArticles = $countStmt->fetchColumn();
+        
+        // Вычисляем OFFSET
+        $offset = ($page - 1) * $perPage;
+        
+        // Получаем статьи для текущей страницы
+        $stmt = $pdo->prepare("
+            SELECT 
+                a.*,
+                u.name as author_name,
+                u.email as author_email,
+                c.name as category_name
+            FROM articles a
+            JOIN users u ON a.author_id = u.id
+            JOIN categories c ON a.category_id = c.id
+            WHERE a.status = 'published'
+            ORDER BY a.published_at DESC, a.created_at DESC
+            LIMIT ? OFFSET ?
+        ");
+        $stmt->execute([$perPage, $offset]);
+        $articles = $stmt->fetchAll();
+        
+        // Дополняем данные
+        foreach ($articles as &$article) {
+            $article['author'] = [
+                'name' => $article['author_name'],
+                'email' => $article['author_email']
+            ];
+            $article['category'] = $article['category_name'];
+            $article['date'] = $article['published_at'] ?: $article['created_at'];
+            $article['tags'] = getArticleTags($article['id']);
+        }
+        
+        return [
+            'articles' => $articles,
+            'pagination' => [
+                'current_page' => $page,
+                'per_page' => $perPage,
+                'total_articles' => $totalArticles,
+                'total_pages' => ceil($totalArticles / $perPage),
+                'has_prev' => $page > 1,
+                'has_next' => $page < ceil($totalArticles / $perPage),
+                'prev_page' => $page > 1 ? $page - 1 : null,
+                'next_page' => $page < ceil($totalArticles / $perPage) ? $page + 1 : null
+            ]
+        ];
+    } catch (PDOException $e) {
+        error_log("Error getting paginated articles: " . $e->getMessage());
+        return [
+            'articles' => [],
+            'pagination' => [
+                'current_page' => 1,
+                'per_page' => $perPage,
+                'total_articles' => 0,
+                'total_pages' => 0,
+                'has_prev' => false,
+                'has_next' => false,
+                'prev_page' => null,
+                'next_page' => null
+            ]
+        ];
+    }
+}
+
+/**
+ * Генерация HTML для пагинации (НОВАЯ ФУНКЦИЯ)
+ */
+function renderPagination($pagination, $baseUrl = 'index.php', $queryParams = []) {
+    if ($pagination['total_pages'] <= 1) {
+        return '';
+    }
+    
+    $html = '<div class="pagination">';
+    
+    // Формируем базовый URL с параметрами
+    $buildUrl = function($page) use ($baseUrl, $queryParams) {
+        $params = array_merge($queryParams, ['page' => $page]);
+        return $baseUrl . '?' . http_build_query($params);
+    };
+    
+    // Кнопка "Предыдущая"
+    if ($pagination['has_prev']) {
+        $html .= '<a href="' . $buildUrl($pagination['prev_page']) . '" class="pagination-btn">← Предыдущая</a>';
+    }
+    
+    // Номера страниц (показываем до 7 страниц)
+    $current = $pagination['current_page'];
+    $total = $pagination['total_pages'];
+    
+    $start = max(1, $current - 3);
+    $end = min($total, $current + 3);
+    
+    // Показываем первую страницу если она не входит в диапазон
+    if ($start > 1) {
+        $html .= '<a href="' . $buildUrl(1) . '" class="pagination-btn">1</a>';
+        if ($start > 2) {
+            $html .= '<span class="pagination-dots">...</span>';
+        }
+    }
+    
+    // Показываем страницы в диапазоне
+    for ($i = $start; $i <= $end; $i++) {
+        $isActive = ($i === $current);
+        $class = $isActive ? 'pagination-btn active' : 'pagination-btn';
+        $html .= '<a href="' . $buildUrl($i) . '" class="' . $class . '">' . $i . '</a>';
+    }
+    
+    // Показываем последнюю страницу если она не входит в диапазон
+    if ($end < $total) {
+        if ($end < $total - 1) {
+            $html .= '<span class="pagination-dots">...</span>';
+        }
+        $html .= '<a href="' . $buildUrl($total) . '" class="pagination-btn">' . $total . '</a>';
+    }
+    
+    // Кнопка "Следующая"
+    if ($pagination['has_next']) {
+        $html .= '<a href="' . $buildUrl($pagination['next_page']) . '" class="pagination-btn">Следующая →</a>';
+    }
+    
+    $html .= '</div>';
+    
+    return $html;
+}
+
+/**
  * Поиск статей
  */
 function searchArticles($query) {
@@ -363,84 +539,6 @@ function getSimilarArticles($articleId, $limit = 3) {
         return $stmt->fetchAll();
     } catch (PDOException $e) {
         error_log("Error getting similar articles: " . $e->getMessage());
-        return [];
-    }
-}
-
-/**
- * Получение статей автора
- */
-function getArticlesByAuthor($authorId) {
-    try {
-        $pdo = getDatabaseConnection();
-        $stmt = $pdo->prepare("
-            SELECT 
-                a.*,
-                u.name as author_name,
-                u.email as author_email,
-                c.name as category_name
-            FROM articles a
-            JOIN users u ON a.author_id = u.id
-            JOIN categories c ON a.category_id = c.id
-            WHERE a.author_id = ? AND a.status = 'published'
-            ORDER BY a.published_at DESC
-        ");
-        $stmt->execute([$authorId]);
-        $articles = $stmt->fetchAll();
-        
-        // Дополняем данные
-        foreach ($articles as &$article) {
-            $article['author'] = [
-                'name' => $article['author_name'],
-                'email' => $article['author_email']
-            ];
-            $article['category'] = $article['category_name'];
-            $article['date'] = $article['published_at'] ?: $article['created_at'];
-            $article['tags'] = getArticleTags($article['id']);
-        }
-        
-        return $articles;
-    } catch (PDOException $e) {
-        error_log("Error getting articles by author: " . $e->getMessage());
-        return [];
-    }
-}
-
-/**
- * Получение статей категории
- */
-function getArticlesByCategory($categoryId) {
-    try {
-        $pdo = getDatabaseConnection();
-        $stmt = $pdo->prepare("
-            SELECT 
-                a.*,
-                u.name as author_name,
-                u.email as author_email,
-                c.name as category_name
-            FROM articles a
-            JOIN users u ON a.author_id = u.id
-            JOIN categories c ON a.category_id = c.id
-            WHERE a.category_id = ? AND a.status = 'published'
-            ORDER BY a.published_at DESC
-        ");
-        $stmt->execute([$categoryId]);
-        $articles = $stmt->fetchAll();
-        
-        // Дополняем данные
-        foreach ($articles as &$article) {
-            $article['author'] = [
-                'name' => $article['author_name'],
-                'email' => $article['author_email']
-            ];
-            $article['category'] = $article['category_name'];
-            $article['date'] = $article['published_at'] ?: $article['created_at'];
-            $article['tags'] = getArticleTags($article['id']);
-        }
-        
-        return $articles;
-    } catch (PDOException $e) {
-        error_log("Error getting articles by category: " . $e->getMessage());
         return [];
     }
 }
@@ -617,6 +715,124 @@ function incrementViews($articleId) {
     }
 }
 
+// ========== ФУНКЦИИ ДЛЯ РАБОТЫ С КОММЕНТАРИЯМИ (НОВЫЕ) ==========
+
+/**
+ * Получение комментариев статьи
+ */
+function getArticleComments($articleId, $status = 'approved') {
+    try {
+        $pdo = getDatabaseConnection();
+        $stmt = $pdo->prepare("
+            SELECT * FROM comments 
+            WHERE article_id = ? AND status = ? 
+            ORDER BY created_at ASC
+        ");
+        $stmt->execute([$articleId, $status]);
+        return $stmt->fetchAll();
+    } catch (PDOException $e) {
+        error_log("Error getting comments: " . $e->getMessage());
+        return [];
+    }
+}
+
+/**
+ * Добавление нового комментария
+ */
+function addComment($articleId, $authorName, $authorEmail, $content) {
+    try {
+        $pdo = getDatabaseConnection();
+        $stmt = $pdo->prepare("
+            INSERT INTO comments (article_id, author_name, author_email, content)
+            VALUES (?, ?, ?, ?)
+        ");
+        return $stmt->execute([$articleId, $authorName, $authorEmail, $content]);
+    } catch (PDOException $e) {
+        error_log("Error adding comment: " . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * Подсчет комментариев статьи
+ */
+function getCommentsCount($articleId, $status = 'approved') {
+    try {
+        $pdo = getDatabaseConnection();
+        $stmt = $pdo->prepare("
+            SELECT COUNT(*) FROM comments 
+            WHERE article_id = ? AND status = ?
+        ");
+        $stmt->execute([$articleId, $status]);
+        return $stmt->fetchColumn();
+    } catch (PDOException $e) {
+        error_log("Error counting comments: " . $e->getMessage());
+        return 0;
+    }
+}
+
+/**
+ * Модерация комментариев (для админки)
+ */
+function updateCommentStatus($commentId, $status) {
+    try {
+        $pdo = getDatabaseConnection();
+        $stmt = $pdo->prepare("
+            UPDATE comments SET status = ? WHERE id = ?
+        ");
+        return $stmt->execute([$status, $commentId]);
+    } catch (PDOException $e) {
+        error_log("Error updating comment status: " . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * Получение всех комментариев для модерации
+ */
+function getAllComments($status = null) {
+    try {
+        $pdo = getDatabaseConnection();
+        
+        if ($status) {
+            $stmt = $pdo->prepare("
+                SELECT c.*, a.title as article_title 
+                FROM comments c
+                JOIN articles a ON c.article_id = a.id
+                WHERE c.status = ?
+                ORDER BY c.created_at DESC
+            ");
+            $stmt->execute([$status]);
+        } else {
+            $stmt = $pdo->query("
+                SELECT c.*, a.title as article_title 
+                FROM comments c
+                JOIN articles a ON c.article_id = a.id
+                ORDER BY c.created_at DESC
+            ");
+        }
+        
+        return $stmt->fetchAll();
+    } catch (PDOException $e) {
+        error_log("Error getting all comments: " . $e->getMessage());
+        return [];
+    }
+}
+
+/**
+ * Удаление комментария
+ */
+function deleteComment($commentId) {
+    try {
+        $pdo = getDatabaseConnection();
+        $stmt = $pdo->prepare("DELETE FROM comments WHERE id = ?");
+        return $stmt->execute([$commentId]);
+    } catch (PDOException $e) {
+        error_log("Error deleting comment: " . $e->getMessage());
+        return false;
+    }
+}
+
 // ========== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ==========
 
 /**
@@ -661,10 +877,14 @@ function getBlogStats() {
         $stmt = $pdo->query("SELECT COUNT(*) FROM categories");
         $stats['categories'] = $stmt->fetchColumn();
         
+        // Количество комментариев
+        $stmt = $pdo->query("SELECT COUNT(*) FROM comments WHERE status = 'approved'");
+        $stats['comments'] = $stmt->fetchColumn();
+        
         return $stats;
     } catch (PDOException $e) {
         error_log("Error getting blog stats: " . $e->getMessage());
-        return ['articles' => 0, 'views' => 0, 'authors' => 0, 'categories' => 0];
+        return ['articles' => 0, 'views' => 0, 'authors' => 0, 'categories' => 0, 'comments' => 0];
     }
 }
 
@@ -676,6 +896,10 @@ function validateArticleData($data) {
     
     if (empty(trim($data['title']))) {
         $errors[] = 'Заголовок обязателен';
+    }
+    
+    if (strlen(trim($data['title'])) > 255) {
+        $errors[] = 'Заголовок слишком длинный (максимум 255 символов)';
     }
     
     if (empty(trim($data['content']))) {
@@ -704,6 +928,41 @@ function validateArticleData($data) {
         if (!$category) {
             $errors[] = 'Категория не найдена';
         }
+    }
+    
+    return $errors;
+}
+
+/**
+ * Валидация данных комментария
+ */
+function validateCommentData($data) {
+    $errors = [];
+    
+    if (empty(trim($data['author_name']))) {
+        $errors[] = 'Имя обязательно';
+    }
+    
+    if (strlen(trim($data['author_name'])) > 100) {
+        $errors[] = 'Имя слишком длинное (максимум 100 символов)';
+    }
+    
+    if (empty(trim($data['author_email']))) {
+        $errors[] = 'Email обязателен';
+    } elseif (!validateEmail($data['author_email'])) {
+        $errors[] = 'Некорректный email адрес';
+    }
+    
+    if (empty(trim($data['content']))) {
+        $errors[] = 'Комментарий не может быть пустым';
+    }
+    
+    if (strlen(trim($data['content'])) < 10) {
+        $errors[] = 'Комментарий должен содержать минимум 10 символов';
+    }
+    
+    if (strlen(trim($data['content'])) > 1000) {
+        $errors[] = 'Комментарий слишком длинный (максимум 1000 символов)';
     }
     
     return $errors;

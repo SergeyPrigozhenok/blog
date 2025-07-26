@@ -78,6 +78,36 @@ CREATE TABLE article_tags (
     FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
 );
 
+-- 6. Таблица комментариев (НОВАЯ)
+DROP TABLE IF EXISTS comments;
+CREATE TABLE comments (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    article_id INT NOT NULL,
+    author_name VARCHAR(100) NOT NULL,
+    author_email VARCHAR(150) NOT NULL,
+    content TEXT NOT NULL,
+    status ENUM('pending', 'approved', 'rejected') DEFAULT 'pending',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    FOREIGN KEY (article_id) REFERENCES articles(id) ON DELETE CASCADE,
+    
+    INDEX idx_article (article_id),
+    INDEX idx_status (status),
+    INDEX idx_created (created_at)
+);
+
+-- 7. Таблица администраторов (НОВАЯ)
+DROP TABLE IF EXISTS admin_users;
+CREATE TABLE admin_users (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    username VARCHAR(50) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    email VARCHAR(150) NOT NULL,
+    last_login TIMESTAMP NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Вставка тестовых данных
 
 -- Авторы
@@ -101,7 +131,10 @@ INSERT INTO tags (name, slug) VALUES
 ('MySQL', 'mysql'),
 ('Оптимизация', 'optimization'),
 ('JavaScript', 'javascript'),
-('Frontend', 'frontend');
+('Frontend', 'frontend'),
+('HTTP', 'http'),
+('Формы', 'forms'),
+('Безопасность', 'security');
 
 -- Статьи
 INSERT INTO articles (id, title, slug, content, excerpt, author_id, category_id, reading_time, published_at, views) VALUES
@@ -123,23 +156,47 @@ INSERT INTO articles (id, title, slug, content, excerpt, author_id, category_id,
 (4, 'JavaScript ES2024: Новинки года', 'javascript-es2024-novinki-goda',
 'JavaScript продолжает развиваться. Array.with() позволяет создавать новые массивы с измененными элементами. Object.groupBy() упрощает группировку данных. Promise.withResolvers() дает больше контроля над промисами. Temporal API наконец заменит Date. Import attributes улучшают работу с модулями. Decorators стандартизируются. Эти нововведения делают JavaScript еще более мощным и удобным для разработки.',
 'Обзор новых возможностей JavaScript ES2024',
-3, 2, 6, '2025-07-05', 0);
+3, 2, 6, '2025-07-05', 0),
+
+(5, 'Пагинация в веб-приложениях', 'paginaciya-v-veb-prilozheniyah',
+'Пагинация необходима для работы с большими объемами данных. SQL LIMIT и OFFSET позволяют получать данные порциями. Важно подсчитывать общее количество записей для корректного отображения навигации. URL параметры используются для передачи номера страницы. UX должен включать информацию о текущей позиции и общем количестве страниц. Кэширование может улучшить производительность пагинированных запросов.',
+'Реализация эффективной пагинации данных в PHP и MySQL',
+2, 3, 7, '2025-07-20', 67);
 
 -- Связи статьи-теги
 INSERT INTO article_tags (article_id, tag_id) VALUES
--- Статья 1: PHP 8
-(1, 1), -- PHP
+-- Статья 1: HTTP протокол
+(1, 8), -- HTTP
 (1, 2), -- Backend
 
--- Статья 2: REST API
+-- Статья 2: HTML формы
 (2, 1), -- PHP
-(2, 3), -- API
+(2, 9), -- Формы
 (2, 2), -- Backend
 
--- Статья 3: MySQL
-(3, 4), -- MySQL
-(3, 5), -- Оптимизация
+-- Статья 3: Безопасность
+(3, 10), -- Безопасность
+(3, 1), -- PHP
 
--- Статья 4: JavaScript ES2024
+-- Статья 4: JavaScript
 (4, 6), -- JavaScript
-(4, 7); -- Frontend
+(4, 7), -- Frontend
+(4, 3), -- API
+
+-- Статья 5: Пагинация
+(5, 1), -- PHP
+(5, 4), -- MySQL
+(5, 5); -- Оптимизация
+
+-- Тестовые комментарии
+INSERT INTO comments (article_id, author_name, author_email, content, status) VALUES
+(1, 'Петр Программист', 'petr@example.com', 'Отличная статья! Очень доступно объяснены основы HTTP протокола.', 'approved'),
+(1, 'Елена Тестировщик', 'elena@example.com', 'Спасибо за разъяснение кодов ответов. Теперь понятно, что означает каждая группа.', 'approved'),
+(2, 'Максим Студент', 'maxim@example.com', 'Можете добавить больше примеров работы с файлами?', 'pending'),
+(3, 'Ольга Аналитик', 'olga@example.com', 'Безопасность действительно важна. Статья очень актуальная!', 'approved'),
+(4, 'Сергей Джуниор', 'sergey@example.com', 'AJAX запросы всегда казались сложными, но ваше объяснение помогло разобраться.', 'approved');
+
+-- Тестовый администратор (пароль: admin123)
+INSERT INTO admin_users (username, password_hash, email) VALUES
+('admin', '$2y$12$/qxv/vS3TseY9sYDvlhkz.DlmdKbEhjAwPGfVDdJ61Y10iz8DdrvO', 'admin@blog.ru'),
+('moderator', '$2y$12$/qxv/vS3TseY9sYDvlhkz.DlmdKbEhjAwPGfVDdJ61Y10iz8DdrvO', 'moderator@blog.ru');
